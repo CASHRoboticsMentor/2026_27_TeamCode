@@ -42,7 +42,7 @@ public class RobotCentricTeleOp extends OpMode {
 
     @Override
     public void loop() {
-        if (gamepad1.leftBumperWasPressed) {
+        if (gamepad1.leftBumperWasPressed()) {
             slowMode = !slowMode;
         }
         double speed = slowMode ? SLOW_SPEED : NORMAL_SPEED;

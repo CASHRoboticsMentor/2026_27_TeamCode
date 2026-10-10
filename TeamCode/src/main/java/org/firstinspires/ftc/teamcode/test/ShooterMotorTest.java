@@ -27,7 +27,7 @@ public class ShooterMotorTest extends OpMode {
     public static double F = 12.0;
 
     public static double VELOCITY_STEP = 50; // ticks/sec added or removed per button press
-    public static double MAX_VELOCITY = 2800; // ticks/sec - adjust for the motor used
+    public static double MAX_VELOCITY = 12800; // ticks/sec - adjust for the motor used
     public static double targetVelocity = 0;
 
     private DcMotorEx shooterMotor;
@@ -46,13 +46,13 @@ public class ShooterMotorTest extends OpMode {
 
     @Override
     public void loop() {
-        if (gamepad1.dpadUpWasPressed) {
+        if (gamepad1.dpadUpWasPressed()) {
             targetVelocity = Math.min(targetVelocity + VELOCITY_STEP, MAX_VELOCITY);
         }
-        if (gamepad1.dpadDownWasPressed) {
-            targetVelocity = Math.max(targetVelocity - VELOCITY_STEP, 0);
+        if (gamepad1.dpadDownWasPressed()) {
+            targetVelocity = Math.max(targetVelocity - VELOCITY_STEP, -MAX_VELOCITY);
         }
-        if (gamepad1.aWasPressed) {
+        if (gamepad1.aWasPressed()) {
             running = !running;
         }
 

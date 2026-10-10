@@ -4,7 +4,6 @@ import static com.pedropathing.api.Paths.line;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
-import com.pedropathing.math.PoseFactory;
 import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
@@ -25,11 +24,10 @@ public class BasicAutonomous extends OpMode {
 
     private Follower follower;
 
-    private final PoseFactory poseFactory = PoseFactory.degrees();
     // TODO: replace with real start/score/park poses for this season's field.
-    private final Pose startPose = poseFactory.of(0, 0, 0);
-    private final Pose scorePose = poseFactory.of(24, 24, 0);
-    private final Pose parkPose = poseFactory.of(24, 48, 0);
+    private final Pose startPose = new Pose(0, 0, Math.toRadians(0));
+    private final Pose scorePose = new Pose(24, 24, Math.toRadians(0));
+    private final Pose parkPose = new Pose(24, 48, Math.toRadians(0));
 
     private enum Step { DRIVE_TO_SCORE, SCORE, DRIVE_TO_PARK, DONE }
     private Step currentStep;

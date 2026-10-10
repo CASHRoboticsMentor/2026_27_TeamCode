@@ -50,25 +50,25 @@ public class IntakeMotorTest extends OpMode {
 
     @Override
     public void loop() {
-        if (gamepad1.dpadUpWasPressed) {
+        if (gamepad1.dpadUpWasPressed()) {
             intakeTargetVelocity = Math.min(intakeTargetVelocity + VELOCITY_STEP, MAX_VELOCITY);
         }
-        if (gamepad1.dpadDownWasPressed) {
+        if (gamepad1.dpadDownWasPressed()) {
             intakeTargetVelocity = Math.max(intakeTargetVelocity - VELOCITY_STEP, 0);
         }
-        if (gamepad1.rightBumperWasPressed) {
+        if (gamepad1.rightBumperWasPressed()) {
             ejectTargetVelocity = Math.min(ejectTargetVelocity + VELOCITY_STEP, MAX_VELOCITY);
         }
-        if (gamepad1.leftBumperWasPressed) {
+        if (gamepad1.leftBumperWasPressed()) {
             ejectTargetVelocity = Math.max(ejectTargetVelocity - VELOCITY_STEP, 0);
         }
-        if (gamepad1.aWasPressed) {
+        if (gamepad1.aWasPressed()) {
             running = !running;
         }
-        if (gamepad1.xWasPressed) {
+        if (gamepad1.xWasPressed()) {
             direction = DcMotorSimple.Direction.FORWARD;
         }
-        if (gamepad1.bWasPressed) {
+        if (gamepad1.bWasPressed()) {
             direction = DcMotorSimple.Direction.REVERSE;
         }
         intakeMotor.setDirection(direction);

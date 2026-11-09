@@ -5,70 +5,107 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 /**
- * Standalone bench test for a closed-loop (PID) velocity-controlled shooter motor.
+ * Standalone bench test for dual shooter motors: pollen_shooter and nector_shooter.
  *
- * Dpad up/down: increment/decrement target velocity. A: toggle the motor on/off.
- * The static fields below are also live-editable from the Panels dashboard.
+ * Gamepad 2 (or Gamepad 1):
+ * - X button: Start both shooter motors.
+ * - Y button: Stop both shooter motors.
+ *
+ * Panels Dashboard Live Controls:
+ * - POLLEN_SHOOTER_MAX_SPEED & NECTOR_SHOOTER_MAX_SPEED: Tune max speeds independently.
+ * - POLLEN_SHOOTER_REVERSE & NECTOR_SHOOTER_REVERSE: Toggle directions independently.
  */
 @Configurable
 @TeleOp(name = "Test: Shooter Motor", group = "Test")
 public class ShooterMotorTest extends OpMode {
 
-    // TODO: match this to the motor's name in the robot configuration.
-    private static final String MOTOR_NAME = "shooter";
+    // Configurable motor names in Panels
+    public static String POLLEN_SHOOTER_NAME = "pollen_shooter";
+    public static String NECTOR_SHOOTER_NAME = "nector_shooter";
 
-    // TODO: tune these for the actual shooter motor/flywheel.
+    // Configurable shooter speeds in Panels
+    public static double POLLEN_SHOOTER_MAX_SPEED = 2000.0; // ticks/sec - editable in Panels
+    public static double NECTOR_SHOOTER_MAX_SPEED = 2000.0; // ticks/sec - editable in Panels
+
+    // Independent direction toggles in Panels
+    public static boolean POLLEN_SHOOTER_REVERSE = false;
+    public static boolean NECTOR_SHOOTER_REVERSE = false;
+
+    // Configurable state
+    public static boolean shootersRunning = false;
+
+    // PIDF tuning parameters for velocity control
     public static double P = 10.0;
     public static double I = 0.0;
     public static double D = 0.0;
     public static double F = 12.0;
 
-    public static double VELOCITY_STEP = 50; // ticks/sec added or removed per button press
-    public static double MAX_VELOCITY = 2800; // ticks/sec - adjust for the motor used
-    public static double targetVelocity = 0;
-
-    private DcMotorEx shooterMotor;
-    private boolean running = false;
+    private DcMotorEx pollenShooter;
+    private DcMotorEx nectorShooter;
 
     @Override
     public void init() {
-        shooterMotor = hardwareMap.get(DcMotorEx.class, MOTOR_NAME);
-        shooterMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        shooterMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        try {
+            pollenShooter = hardwareMap.get(DcMotorEx.class, POLLEN_SHOOTER_NAME);
+            pollenShooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+            pollenShooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            pollenShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        } catch (Exception e) {
+            telemetry.addData("Warning", "Pollen shooter motor '%s' not found", POLLEN_SHOOTER_NAME);
+        }
 
-        telemetry.addLine("Shooter Motor Test initialized");
+        try {
+            nectorShooter = hardwareMap.get(DcMotorEx.class, NECTOR_SHOOTER_NAME);
+            nectorShooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+            nectorShooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            nectorShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        } catch (Exception e) {
+            telemetry.addData("Warning", "Nector shooter motor '%s' not found", NECTOR_SHOOTER_NAME);
+        }
+
+        telemetry.addLine("Dual Shooter Motor Test initialized");
         telemetry.update();
     }
 
     @Override
     public void loop() {
-        if (gamepad1.dpadUpWasPressed) {
-            targetVelocity = Math.min(targetVelocity + VELOCITY_STEP, MAX_VELOCITY);
+        // Controls: Gamepad 2 or Gamepad 1 (X = Start, Y = Stop)
+        if (gamepad2.xWasPressed() || gamepad1.xWasPressed()) {
+            shootersRunning = true;
         }
-        if (gamepad1.dpadDownWasPressed) {
-            targetVelocity = Math.max(targetVelocity - VELOCITY_STEP, 0);
-        }
-        if (gamepad1.aWasPressed) {
-            running = !running;
+        if (gamepad2.yWasPressed() || gamepad1.yWasPressed()) {
+            shootersRunning = false;
         }
 
-        // Re-applied every loop so PIDF edits made in Panels take effect immediately.
-        shooterMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
-        shooterMotor.setVelocity(running ? targetVelocity : 0);
+        if (pollenShooter != null) {
+            pollenShooter.setDirection(POLLEN_SHOOTER_REVERSE ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+            pollenShooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+            pollenShooter.setVelocity(shootersRunning ? POLLEN_SHOOTER_MAX_SPEED : 0);
+            telemetry.addData("Pollen Actual Speed", pollenShooter.getVelocity());
+        }
 
-        telemetry.addData("Running", running);
-        telemetry.addData("Target Velocity (ticks/s)", targetVelocity);
-        telemetry.addData("Actual Velocity (ticks/s)", shooterMotor.getVelocity());
-        telemetry.addData("Power", shooterMotor.getPower());
+        if (nectorShooter != null) {
+            nectorShooter.setDirection(NECTOR_SHOOTER_REVERSE ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+            nectorShooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+            nectorShooter.setVelocity(shootersRunning ? NECTOR_SHOOTER_MAX_SPEED : 0);
+            telemetry.addData("Nector Actual Speed", nectorShooter.getVelocity());
+        }
+
+        telemetry.addData("Shooters Running (X=Start, Y=Stop)", shootersRunning);
+        telemetry.addData("Pollen Target Speed", POLLEN_SHOOTER_MAX_SPEED);
+        telemetry.addData("Nector Target Speed", NECTOR_SHOOTER_MAX_SPEED);
+        telemetry.addData("Pollen Reverse", POLLEN_SHOOTER_REVERSE);
+        telemetry.addData("Nector Reverse", NECTOR_SHOOTER_REVERSE);
         telemetry.update();
     }
 
     @Override
     public void stop() {
-        shooterMotor.setVelocity(0);
+        if (pollenShooter != null) pollenShooter.setVelocity(0);
+        if (nectorShooter != null) nectorShooter.setVelocity(0);
     }
 }

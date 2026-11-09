@@ -10,12 +10,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.OpModeStorage;
-import org.firstinspires.ftc.teamcode.pedro.AutonomousRoutine;
-import org.firstinspires.ftc.teamcode.pedro.Constants;
-import org.firstinspires.ftc.teamcode.pedro.Hive_Down_Garden;
-import org.firstinspires.ftc.teamcode.pedro.Hive_Down_Parking;
-import org.firstinspires.ftc.teamcode.pedro.Hive_Up_Garden;
-import org.firstinspires.ftc.teamcode.pedro.Hive_Up_Parking;
+import org.firstinspires.ftc.teamcode.pedro.*;
 
 /**
  * Single Autonomous OpMode with interactive pre-match configuration and multi-path routine selection.

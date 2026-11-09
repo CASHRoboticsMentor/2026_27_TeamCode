@@ -1,144 +1,92 @@
 package org.firstinspires.ftc.teamcode.test;
 
-import android.graphics.Color;
-
 import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DistanceSensor;
-import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
-import com.qualcomm.robotcore.hardware.NormalizedRGBA;
 import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.hardware.TouchSensor;
-
-import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 /**
- * Test OpMode integrating:
- * - 2 Servos (servo0, servo1)
- * - 1 Touch Sensor (touchSensor)
- * - 1 Distance Sensor (distanceSensor)
- * - 1 Color Sensor (colorSensor)
- * - 1 DC Motor (motor0)
+ * Standalone bench test for pollen_servo and nector_servo using center-relative degrees (150° center).
  *
- * Requirements:
- * 1. When touch sensor is pressed, rotate servo 0 one full rotation (position 1.0).
- * 2. If distance sensor sees an object < 0.5 meters, rotate servo 1 half a revolution (position 0.5).
- * 3. If color sensor sees yellow, spin motor0 in 1 direction at half speed (+0.5).
- * 4. If color sensor sees blue, spin motor0 in the other direction at half speed (-0.5).
- * 5. Otherwise (neither color detected), motor0 stands still (0.0).
+ * Gamepad 2 Left Trigger: Rotates pollen_servo relative to center (150°) by POLLEN_SERVO_RELATIVE_DEG in CCW/CW direction.
+ * Gamepad 2 Right Trigger: Rotates nector_servo relative to center (150°) by NECTOR_SERVO_RELATIVE_DEG in CW/CCW direction.
+ *
+ * Released trigger state returns both servos back to center position (150° / command 0.5).
+ * All degree offsets and direction flags are live-editable from the Panels web dashboard.
  */
 @Configurable
-@TeleOp(name = "Test: Sensors and Actuators", group = "Test")
+@TeleOp(name = "Test: Pollen & Nector Servos", group = "Test")
 public class SensorMotorServoTest extends OpMode {
 
-    // Configurable hardware device names
-    public static String SERVO_0_NAME = "servo0";
-    public static String SERVO_1_NAME = "servo1";
-    public static String TOUCH_SENSOR_NAME = "touchSensor";
-    public static String DISTANCE_SENSOR_NAME = "distanceSensor";
-    public static String COLOR_SENSOR_NAME = "colorSensor";
-    public static String MOTOR_NAME = "motor0";
+    // Configurable Servo hardware device names
+    public static String POLLEN_SERVO_NAME = "pollen_servo";
+    public static String NECTOR_SERVO_NAME = "nector_servo";
 
-    // Configurable positions and speeds
-    public static double SERVO_0_PRESSED_POS = 1.0;
-    public static double SERVO_0_DEFAULT_POS = 0.0;
-    public static double SERVO_1_HALF_REV_POS = 0.5;
-    public static double SERVO_1_DEFAULT_POS = 0.0;
+    // Center position degrees (command 0.5) and physical range
+    public static double SERVO_CENTER_DEG = 150.0;
+    public static double SERVO_TOTAL_RANGE_DEG = 300.0;
 
-    public static double DISTANCE_THRESHOLD_METERS = 0.5;
-    public static double MOTOR_HALF_SPEED = 0.5;
+    // Relative degree offset from center on trigger press
+    public static double POLLEN_SERVO_RELATIVE_DEG = 90.0; // degrees from center
+    public static double NECTOR_SERVO_RELATIVE_DEG = 90.0; // degrees from center
 
-    // Hardware fields
-    private Servo servo0;
-    private Servo servo1;
-    private TouchSensor touchSensor;
-    private DistanceSensor distanceSensor;
-    private NormalizedColorSensor colorSensor;
-    private DcMotor motor0;
+    // Direction looking at shaft (true = Counter-Clockwise [CCW], false = Clockwise [CW])
+    public static boolean POLLEN_SERVO_CCW = true;  // CCW (+offset from 150°)
+    public static boolean NECTOR_SERVO_CCW = false; // CW (-offset from 150°)
 
-    // Array for holding HSV color values
-    private final float[] hsvValues = new float[3];
+    private Servo pollenServo;
+    private Servo nectorServo;
 
     @Override
     public void init() {
-        // Map servos
-        servo0 = hardwareMap.get(Servo.class, SERVO_0_NAME);
-        servo1 = hardwareMap.get(Servo.class, SERVO_1_NAME);
+        try {
+            pollenServo = hardwareMap.get(Servo.class, POLLEN_SERVO_NAME);
+            pollenServo.setPosition(centerDegreesToCommand());
+        } catch (Exception e) {
+            telemetry.addData("Warning", "Pollen servo '%s' not found", POLLEN_SERVO_NAME);
+        }
 
-        servo0.setPosition(SERVO_0_DEFAULT_POS);
-        servo1.setPosition(SERVO_1_DEFAULT_POS);
+        try {
+            nectorServo = hardwareMap.get(Servo.class, NECTOR_SERVO_NAME);
+            nectorServo.setPosition(centerDegreesToCommand());
+        } catch (Exception e) {
+            telemetry.addData("Warning", "Nector servo '%s' not found", NECTOR_SERVO_NAME);
+        }
 
-        // Map sensors
-        touchSensor = hardwareMap.get(TouchSensor.class, TOUCH_SENSOR_NAME);
-        distanceSensor = hardwareMap.get(DistanceSensor.class, DISTANCE_SENSOR_NAME);
-        colorSensor = hardwareMap.get(NormalizedColorSensor.class, COLOR_SENSOR_NAME);
-
-        // Map motor
-        motor0 = hardwareMap.get(DcMotor.class, MOTOR_NAME);
-        motor0.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        motor0.setPower(0);
-
-        telemetry.addLine("Sensors and Actuators Test Initialized");
+        telemetry.addLine("Pollen & Nector Servo Test Initialized (Center-Relative Mode)");
         telemetry.update();
+    }
+
+    private double centerDegreesToCommand() {
+        return SERVO_CENTER_DEG / SERVO_TOTAL_RANGE_DEG;
+    }
+
+    private double centerRelativeDegreesToCommand(double relativeDegrees, boolean isCCW) {
+        double absoluteDegrees = isCCW ? (SERVO_CENTER_DEG + relativeDegrees) : (SERVO_CENTER_DEG - relativeDegrees);
+        return Math.max(0.0, Math.min(1.0, absoluteDegrees / SERVO_TOTAL_RANGE_DEG));
     }
 
     @Override
     public void loop() {
-        // 1. Touch sensor -> Servo 0
-        boolean isTouchPressed = touchSensor.isPressed();
-        if (isTouchPressed) {
-            servo0.setPosition(SERVO_0_PRESSED_POS);
-        } else {
-            servo0.setPosition(SERVO_0_DEFAULT_POS);
+        boolean leftTriggerPressed = gamepad2.left_trigger > 0.1 || gamepad1.left_trigger > 0.1;
+        boolean rightTriggerPressed = gamepad2.right_trigger > 0.1 || gamepad1.right_trigger > 0.1;
+
+        if (pollenServo != null) {
+            double command = leftTriggerPressed ? centerRelativeDegreesToCommand(POLLEN_SERVO_RELATIVE_DEG, POLLEN_SERVO_CCW) : centerDegreesToCommand();
+            pollenServo.setPosition(command);
+            double currentAngle = command * SERVO_TOTAL_RANGE_DEG;
+            telemetry.addData("Pollen Target Angle", "%.1f° (Cmd: %.3f)", currentAngle, command);
         }
 
-        // 2. Distance sensor -> Servo 1
-        double distanceMeters = distanceSensor.getDistance(DistanceUnit.METER);
-        boolean objectDetected = distanceMeters < DISTANCE_THRESHOLD_METERS;
-        if (objectDetected) {
-            servo1.setPosition(SERVO_1_HALF_REV_POS);
-        } else {
-            servo1.setPosition(SERVO_1_DEFAULT_POS);
+        if (nectorServo != null) {
+            double command = rightTriggerPressed ? centerRelativeDegreesToCommand(NECTOR_SERVO_RELATIVE_DEG, NECTOR_SERVO_CCW) : centerDegreesToCommand();
+            nectorServo.setPosition(command);
+            double currentAngle = command * SERVO_TOTAL_RANGE_DEG;
+            telemetry.addData("Nector Target Angle", "%.1f° (Cmd: %.3f)", currentAngle, command);
         }
 
-        // 3. Color sensor -> Motor 0
-        NormalizedRGBA colors = colorSensor.getNormalizedColors();
-        Color.colorToHSV(colors.toColor(), hsvValues);
-
-        float hue = hsvValues[0];
-        float saturation = hsvValues[1];
-        float value = hsvValues[2];
-
-        // Yellow hue is ~30° to 90°; Blue hue is ~180° to 250°
-        boolean isYellow = (saturation > 0.3) && (hue >= 30 && hue <= 90);
-        boolean isBlue = (saturation > 0.3) && (hue >= 180 && hue <= 250);
-
-        String detectedColor = "NONE";
-        if (isYellow) {
-            motor0.setPower(MOTOR_HALF_SPEED);
-            detectedColor = "YELLOW";
-        } else if (isBlue) {
-            motor0.setPower(-MOTOR_HALF_SPEED);
-            detectedColor = "BLUE";
-        } else {
-            motor0.setPower(0.0);
-        }
-
-        // Telemetry readout
-        telemetry.addData("Touch Pressed", isTouchPressed);
-        telemetry.addData("Servo 0 Position", servo0.getPosition());
-        telemetry.addData("Distance (m)", "%.3f", distanceMeters);
-        telemetry.addData("Servo 1 Position", servo1.getPosition());
-        telemetry.addData("Color Detected", detectedColor);
-        telemetry.addData("Color Hue/Sat/Val", "H:%.1f S:%.2f V:%.2f", hue, saturation, value);
-        telemetry.addData("Motor 0 Power", motor0.getPower());
+        telemetry.addData("Left Trigger (Pollen)", leftTriggerPressed);
+        telemetry.addData("Right Trigger (Nector)", rightTriggerPressed);
         telemetry.update();
-    }
-
-    @Override
-    public void stop() {
-        motor0.setPower(0);
     }
 }

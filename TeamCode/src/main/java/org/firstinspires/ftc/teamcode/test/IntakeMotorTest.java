@@ -11,31 +11,38 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 /**
  * Standalone bench test for a closed-loop (PID) velocity-controlled intake motor.
  *
- * Dpad up/down: increment/decrement intake speed. Bumpers: increment/decrement eject speed.
- * A: toggle the motor on/off. X: run forward (intake). B: run reverse (eject).
- * The static fields below are also live-editable from the Panels dashboard.
+ * Gamepad 2 Left Joystick:
+ * - Negative Y (push forward): spins motor in positive direction at INTAKE_MAX_SPEED (slower).
+ * - Positive Y (pull backward): spins motor in negative direction at OUTPUT_MAX_SPEED (faster).
+ * All public static fields below are live-editable from the Panels dashboard.
  */
 @Configurable
 @TeleOp(name = "Test: Intake Motor", group = "Test")
 public class IntakeMotorTest extends OpMode {
 
-    // TODO: match this to the motor's name in the robot configuration.
-    private static final String MOTOR_NAME = "intake";
+    // Configurable motor name in Panels
+    public static String MOTOR_NAME = "intake";
 
-    // TODO: tune these for the actual intake motor.
+    // PIDF tuning parameters for closed-loop velocity control
     public static double P = 10.0;
     public static double I = 0.0;
     public static double D = 0.0;
     public static double F = 12.0;
 
-    public static double VELOCITY_STEP = 50; // ticks/sec added or removed per button press
-    public static double MAX_VELOCITY = 2800; // ticks/sec - adjust for the motor used
-    public static double intakeTargetVelocity = 0;
-    public static double ejectTargetVelocity = 0;
+    // Configurable speed limits in Panels (Intake is slower than Output)
+    public static double INTAKE_MAX_SPEED = 1500; // ticks/sec for intake (negative Y stick -> positive motor direction)
+    public static double OUTPUT_MAX_SPEED = 2800; // ticks/sec for output/eject (positive Y stick -> negative motor direction)
+    public static double VELOCITY_STEP = 100;
+
+    public static boolean running = false;
+    public static boolean reverseDirection = false;
+
+    // Optional direct power mode (for open-loop testing without encoders)
+    public static boolean useDirectPower = false;
+    public static double directPowerIntake = 0.5;  // slower intake power limit
+    public static double directPowerOutput = 0.85; // faster output power limit
 
     private DcMotorEx intakeMotor;
-    private boolean running = false;
-    private DcMotorSimple.Direction direction = DcMotorSimple.Direction.FORWARD;
 
     @Override
     public void init() {
@@ -50,46 +57,68 @@ public class IntakeMotorTest extends OpMode {
 
     @Override
     public void loop() {
-        if (gamepad1.dpadUpWasPressed()) {
-            intakeTargetVelocity = Math.min(intakeTargetVelocity + VELOCITY_STEP, MAX_VELOCITY);
-        }
-        if (gamepad1.dpadDownWasPressed()) {
-            intakeTargetVelocity = Math.max(intakeTargetVelocity - VELOCITY_STEP, 0);
-        }
-        if (gamepad1.rightBumperWasPressed()) {
-            ejectTargetVelocity = Math.min(ejectTargetVelocity + VELOCITY_STEP, MAX_VELOCITY);
-        }
-        if (gamepad1.leftBumperWasPressed()) {
-            ejectTargetVelocity = Math.max(ejectTargetVelocity - VELOCITY_STEP, 0);
-        }
-        if (gamepad1.aWasPressed()) {
-            running = !running;
-        }
-        if (gamepad1.xWasPressed()) {
-            direction = DcMotorSimple.Direction.FORWARD;
-        }
-        if (gamepad1.bWasPressed()) {
-            direction = DcMotorSimple.Direction.REVERSE;
-        }
-        intakeMotor.setDirection(direction);
+        boolean dpadUp = gamepad2.dpadUpWasPressed() || gamepad1.dpadUpWasPressed();
+        boolean dpadDown = gamepad2.dpadDownWasPressed() || gamepad1.dpadDownWasPressed();
 
-        // Re-applied every loop so PIDF edits made in Panels take effect immediately.
-        intakeMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+        if (dpadUp) {
+            INTAKE_MAX_SPEED += VELOCITY_STEP;
+        }
+        if (dpadDown) {
+            INTAKE_MAX_SPEED = Math.max(0, INTAKE_MAX_SPEED - VELOCITY_STEP);
+        }
 
-        double targetVelocity = direction == DcMotorSimple.Direction.FORWARD ? intakeTargetVelocity : ejectTargetVelocity;
-        intakeMotor.setVelocity(running ? targetVelocity : 0);
+        // Controller 2 Left stick (-1.0 is forward/negative Y, +1.0 is backward/positive Y)
+        double stickY = Math.abs(gamepad2.left_stick_y) >= 0.05 ? gamepad2.left_stick_y : gamepad1.left_stick_y;
 
-        telemetry.addData("Running", running);
-        telemetry.addData("Direction", direction);
-        telemetry.addData("Intake Speed (ticks/s)", intakeTargetVelocity);
-        telemetry.addData("Eject Speed (ticks/s)", ejectTargetVelocity);
-        telemetry.addData("Actual Velocity (ticks/s)", intakeMotor.getVelocity());
-        telemetry.addData("Power", intakeMotor.getPower());
+        intakeMotor.setDirection(reverseDirection ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+
+        if (useDirectPower) {
+            double powerOutput;
+            if (Math.abs(stickY) >= 0.05) {
+                // Negative Y -> positive motor direction at directPowerIntake (slower)
+                // Positive Y -> negative motor direction at directPowerOutput (faster)
+                double maxPower = stickY < 0 ? directPowerIntake : directPowerOutput;
+                powerOutput = -stickY * maxPower;
+            } else if (running) {
+                powerOutput = directPowerIntake;
+            } else {
+                powerOutput = 0;
+            }
+            intakeMotor.setPower(powerOutput);
+        } else {
+            // Re-applied every loop so PIDF edits made in Panels take effect immediately
+            intakeMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+
+            double currentTargetVelocity;
+            if (Math.abs(stickY) >= 0.05) {
+                // Negative Y stick -> Positive motor speed (slower INTAKE_MAX_SPEED)
+                // Positive Y stick -> Negative motor speed (faster OUTPUT_MAX_SPEED)
+                double maxSpeed = stickY < 0 ? INTAKE_MAX_SPEED : OUTPUT_MAX_SPEED;
+                currentTargetVelocity = -stickY * maxSpeed;
+            } else if (running) {
+                currentTargetVelocity = INTAKE_MAX_SPEED;
+            } else {
+                currentTargetVelocity = 0;
+            }
+
+            intakeMotor.setVelocity(currentTargetVelocity);
+        }
+
+        telemetry.addData("Stick Y (Gamepad 2)", "%.2f", stickY);
+        telemetry.addData("Mode", useDirectPower ? "Direct Power" : "PIDF Velocity");
+        telemetry.addData("Intake Max Speed (Slower)", INTAKE_MAX_SPEED);
+        telemetry.addData("Output Max Speed (Faster)", OUTPUT_MAX_SPEED);
+        telemetry.addData("Actual Motor Velocity (ticks/s)", intakeMotor.getVelocity());
+        telemetry.addData("Actual Motor Power", intakeMotor.getPower());
+        telemetry.addData("PIDF", "P=%.2f I=%.2f D=%.2f F=%.2f", P, I, D, F);
         telemetry.update();
     }
 
     @Override
     public void stop() {
-        intakeMotor.setVelocity(0);
+        if (intakeMotor != null) {
+            intakeMotor.setVelocity(0);
+            intakeMotor.setPower(0);
+        }
     }
 }
